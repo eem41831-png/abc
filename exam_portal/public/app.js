@@ -2,7 +2,7 @@
 let jwtToken = localStorage.getItem('examgoal_jwt') || null;
 let candidate = JSON.parse(localStorage.getItem('examgoal_candidate') || 'null');
 let currentAccessCode = localStorage.getItem('examgoal_passcode') || '';
-let testSessionId = null;
+let testSessionId = localStorage.getItem('examgoal_active_session') || null;
 let questions = [];
 let currentIndex = 0;
 let answers = {}; // testQId -> selectedOption (A,B,C,D) or numerical string
@@ -38,6 +38,7 @@ const violationText = document.getElementById('violationText');
 const violationCountEl = document.getElementById('violationCount');
 const resumeTestBtn = document.getElementById('resumeTestBtn');
 const confirmSubmitModal = document.getElementById('confirmSubmitModal');
+const submittingOverlay = document.getElementById('submittingOverlay');
 const modalAnsweredCount = document.getElementById('modalAnsweredCount');
 const imageLightboxModal = document.getElementById('imageLightboxModal');
 const lightboxImg = document.getElementById('lightboxImg');
@@ -202,6 +203,7 @@ async function startTestSession(accessCode) {
         }
 
         testSessionId = data.testSessionId;
+        localStorage.setItem('examgoal_active_session', testSessionId);
         questions = data.questions;
         remainingSeconds = (data.durationMinutes || 180) * 60;
         answers = {};
@@ -504,7 +506,25 @@ async function submitTest(isAutoSubmit = false) {
     testSubmitted = true;
     clearInterval(timerInterval);
 
-    const timeTaken = (180 * 60) - remainingSeconds;
+    // 1. Immediately close modals & drawer
+    if (confirmSubmitModal) confirmSubmitModal.classList.add('hidden');
+    if (paletteDrawer) paletteDrawer.classList.remove('open');
+
+    // 2. Hide active test layout immediately so candidate cannot interact
+    if (testView) testView.classList.add('hidden');
+
+    // 3. Show sealing & submission progress indicator
+    if (submittingOverlay) submittingOverlay.classList.remove('hidden');
+
+    // 4. Disable all inputs on the page to prevent any further entry
+    document.querySelectorAll('input, button, textarea').forEach(el => {
+        if (!el.closest('#completionView')) {
+            el.disabled = true;
+        }
+    });
+
+    const timeTaken = Math.max(1, (180 * 60) - (remainingSeconds || 0));
+    const activeId = testSessionId || localStorage.getItem('examgoal_active_session');
 
     try {
         const res = await fetch('/api/test/submit', {
@@ -514,37 +534,52 @@ async function submitTest(isAutoSubmit = false) {
                 'Authorization': `Bearer ${jwtToken}`
             },
             body: JSON.stringify({
-                testSessionId,
-                answers,
-                tabSwitches,
-                screenSearchAttempts,
+                testSessionId: activeId,
+                answers: answers || {},
+                tabSwitches: tabSwitches || 0,
+                screenSearchAttempts: screenSearchAttempts || 0,
                 timeTakenSeconds: timeTaken
             })
         });
 
-        const data = await res.json();
-
-        // Switch to Completion View (STRICTLY NO SCORE REVEALED)
-        testView.classList.add('hidden');
-        completionView.classList.remove('hidden');
+        const data = await res.json().catch(() => ({}));
+        if (data && data.candidateName && candidate) {
+            candidate.name = data.candidateName;
+        }
+    } catch (err) {
+        console.warn("Submission background sync notice:", err);
+    } finally {
+        // 5. Always transition to final Completion View
+        if (submittingOverlay) submittingOverlay.classList.add('hidden');
+        if (testView) testView.classList.add('hidden');
+        if (completionView) completionView.classList.remove('hidden');
         document.body.classList.remove('screen-shielded');
-        document.getElementById('completionCandidateName').textContent = candidate.name;
 
+        // Safe display of candidate name
+        const candidateName = (candidate && candidate.name) ? candidate.name : 'Candidate';
+        const nameEl = document.getElementById('completionCandidateName');
+        if (nameEl) nameEl.textContent = candidateName;
+
+        // Cleanup local session state
+        localStorage.removeItem('examgoal_active_session');
+
+        // Re-enable retest button inside completionView
+        const retestBtn = document.getElementById('retestBtn');
+        if (retestBtn) retestBtn.disabled = false;
+
+        // Exit fullscreen if active
         if (document.fullscreenElement && document.exitFullscreen) {
             document.exitFullscreen().catch(() => {});
         }
-    } catch (err) {
-        console.error("Submission notice:", err);
-        testView.classList.add('hidden');
-        completionView.classList.remove('hidden');
-        document.body.classList.remove('screen-shielded');
     }
 }
 
 // Retest Trigger (Prompts for code / resets to initial state)
 document.getElementById('retestBtn').addEventListener('click', () => {
+    testSubmitted = false;
     completionView.classList.add('hidden');
     authView.classList.remove('hidden');
+    document.querySelectorAll('input, button, textarea').forEach(el => el.disabled = false);
     if (accessCodeInput) accessCodeInput.value = currentAccessCode || '';
 });
 

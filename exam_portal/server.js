@@ -306,15 +306,17 @@ app.post('/api/test/submit', requireAuth, async (req, res) => {
         fs.writeFileSync(path.join(backupDir, `submission_${testSessionId}.json`), JSON.stringify(submissionRecord, null, 2));
     } catch (_) {}
 
-    // Dispatch detailed scorecard email to shan01tnu@gmail.com
-    await sendEvaluatorEmail(submissionRecord);
-
-    // Return message to student WITHOUT showing score
+    // Return immediate response to candidate so browser UI doesn't hang or stall!
     res.json({
         success: true,
         message: "Assessment Sealed & Completed.",
         wishingNote: "Your responses have been cryptographically sealed and transmitted directly to the institutional evaluator for grading. Wishing you immense success on your academic journey!",
         canRetest: true
+    });
+
+    // Dispatch detailed scorecard email in background (non-blocking)
+    sendEvaluatorEmail(submissionRecord).catch(mailErr => {
+        console.warn("Background scorecard email notice:", mailErr.message);
     });
 });
 

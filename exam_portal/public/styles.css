@@ -1011,6 +1011,26 @@ body.screen-shielded .question-viewport {
   z-index: 50;
 }
 
+.submitting-spinner-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px 0;
+}
+
+.spinner {
+  width: 42px;
+  height: 42px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--emerald);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .modal-card {
   width: 100%;
   max-width: 430px;

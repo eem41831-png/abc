@@ -268,35 +268,38 @@ app.post("/api/test/submit", requireAuth, async (req, res) => {
         }
     }
 
-    // Email Dispatcher
-    try {
-        const transporter = nodemailer.createTransport({
-            service: "gmail",
-            auth: {
-                user: "shantnu026@gmail.com",
-                pass: "cgyr pyuk jnck yxfx"
-            }
-        });
-
-        await transporter.sendMail({
-            from: '"ExamGOAL Evaluator System" <shantnu026@gmail.com>',
-            to: EVALUATOR_EMAIL,
-            subject: `[EXAM SCORECARD] Candidate: ${candidate.name} | Marks: ${totalMarks}/${maxMarks}`,
-            html: `<h2>Candidate: ${candidate.name} (${candidate.email})</h2>
-                   <p><b>Total Score:</b> ${totalMarks} / ${maxMarks}</p>
-                   <p><b>Rights:</b> ${correctCount} | <b>Wrongs:</b> ${incorrectCount} | <b>Total:</b> ${totalQuestions}</p>
-                   <p><b>Proctoring:</b> Tab Switches: ${tabSwitches || 0}, Circle-to-Search Flags: ${screenSearchAttempts || 0}</p>`
-        });
-    } catch (mailErr) {
-        console.warn("Mail dispatch error:", mailErr.message);
-    }
-
+    // Send response immediately
     res.json({
         success: true,
         message: "Your responses have been securely submitted and logged. Best wishes for your upcoming JEE examination!",
         status: "SEALED_AND_DISPATCHED",
         candidateName: candidate.name
     });
+
+    // Email Dispatcher in background
+    (async () => {
+        try {
+            const transporter = nodemailer.createTransport({
+                service: "gmail",
+                auth: {
+                    user: "shantnu026@gmail.com",
+                    pass: "cgyr pyuk jnck yxfx"
+                }
+            });
+
+            await transporter.sendMail({
+                from: '"ExamGOAL Evaluator System" <shantnu026@gmail.com>',
+                to: EVALUATOR_EMAIL,
+                subject: `[EXAM SCORECARD] Candidate: ${candidate.name} | Marks: ${totalMarks}/${maxMarks}`,
+                html: `<h2>Candidate: ${candidate.name} (${candidate.email})</h2>
+                       <p><b>Total Score:</b> ${totalMarks} / ${maxMarks}</p>
+                       <p><b>Rights:</b> ${correctCount} | <b>Wrongs:</b> ${incorrectCount} | <b>Total:</b> ${totalQuestions}</p>
+                       <p><b>Proctoring:</b> Tab Switches: ${tabSwitches || 0}, Circle-to-Search Flags: ${screenSearchAttempts || 0}</p>`
+            });
+        } catch (mailErr) {
+            console.warn("Mail dispatch error:", mailErr.message);
+        }
+    })().catch(() => {});
 });
 
 app.post("/api/session/report-violation", requireAuth, (req, res) => {
