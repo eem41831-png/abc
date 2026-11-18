@@ -154,6 +154,19 @@ app.post('/api/test/start', requireAuth, async (req, res) => {
             startTime: Date.now()
         });
 
+        // Persist to MongoDB for serverless / multi-instance reliability (Firebase / Cloud)
+        if (mongoDb) {
+            try {
+                await mongoDb.collection('active_sessions').updateOne(
+                    { testSessionId },
+                    { $set: { testSessionId, candidate: req.user, questions: finalShuffled, startTime: Date.now() } },
+                    { upsert: true }
+                );
+            } catch (err) {
+                console.warn("Could not persist active session to DB:", err.message);
+            }
+        }
+
         // Strip answers and solutions for the client
         const sanitizedForClient = finalShuffled.map((q, idx) => ({
             testQId: idx + 1,
@@ -182,13 +195,24 @@ app.post('/api/test/start', requireAuth, async (req, res) => {
 app.post('/api/test/submit', requireAuth, async (req, res) => {
     const { testSessionId, answers, tabSwitches, screenSearchAttempts, timeTakenSeconds } = req.body;
 
-    const session = activeTestSessions.get(testSessionId);
+    let session = activeTestSessions.get(testSessionId);
+    if (!session && mongoDb) {
+        try {
+            session = await mongoDb.collection('active_sessions').findOne({ testSessionId });
+        } catch (e) {
+            console.warn("DB session fetch warning:", e.message);
+        }
+    }
+
     if (!session) {
         return res.status(400).json({ error: "Test session not found or already submitted." });
     }
 
     const { candidate, questions } = session;
     activeTestSessions.delete(testSessionId);
+    if (mongoDb) {
+        mongoDb.collection('active_sessions').deleteOne({ testSessionId }).catch(() => {});
+    }
 
     let totalMarks = 0;
     let correctCount = 0;
@@ -584,11 +608,15 @@ app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-app.listen(PORT, () => {
-    console.log(`\n==================================================================`);
-    console.log(`  ExamGOAL Test Engine Live on http://localhost:${PORT}`);
-    console.log(`  Owner Access Passcode: ${CURRENT_EXAM_PASSCODE}`);
-    console.log(`  Proctoring: Anti-Copy, Anti-Tab, Anti-Circle-To-Search`);
-    console.log(`  Evaluator Destination: ${EVALUATOR_EMAIL}`);
-    console.log(`==================================================================\n`);
-});
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`\n==================================================================`);
+        console.log(`  ExamGOAL Test Engine Live on http://localhost:${PORT}`);
+        console.log(`  Owner Access Passcode: ${CURRENT_EXAM_PASSCODE}`);
+        console.log(`  Proctoring: Anti-Copy, Anti-Tab, Anti-Circle-To-Search`);
+        console.log(`  Evaluator Destination: ${EVALUATOR_EMAIL}`);
+        console.log(`==================================================================\n`);
+    });
+}
+
+module.exports = app;
