@@ -1,4 +1,15 @@
 {
+  "name": "examgoal-cbt-portal",
+  "version": "1.0.0",
+  "description": "Secure CBT Examination Portal & Proctoring Engine",
+  "main": "exam_portal/server.js",
+  "scripts": {
+    "start": "node exam_portal/server.js",
+    "dev": "node exam_portal/server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "cors": "^2.8.6",
     "dotenv": "^18.0.10",

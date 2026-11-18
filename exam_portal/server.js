@@ -10,8 +10,8 @@ const nodemailer = require('nodemailer');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "examgoal_quantum_secure_jwt_key_2026";
-const MONGO_URI = "mongodb+srv://eem41831_db_user:iyqvtKvKRlJuMtVs@cluster0.o1b2ccj.mongodb.net/?retryWrites=true&w=majority&connectTimeoutMS=10000";
-const EVALUATOR_EMAIL = "shan01tnu@gmail.com";
+const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://eem41831_db_user:iyqvtKvKRlJuMtVs@cluster0.o1b2ccj.mongodb.net/?retryWrites=true&w=majority&connectTimeoutMS=10000";
+const EVALUATOR_EMAIL = process.env.EVALUATOR_EMAIL || "shan01tnu@gmail.com";
 
 // Owner Exam Access Code (Must be provided to students to begin)
 let CURRENT_EXAM_PASSCODE = process.env.EXAM_PASSCODE || "ORGANIC2026";
@@ -447,24 +447,33 @@ async function sendEvaluatorEmail(record) {
 
     try {
         let transporter;
-        if (process.env.SMTP_HOST && process.env.SMTP_USER) {
-            transporter = nodemailer.createTransport({
-                host: process.env.SMTP_HOST,
-                port: process.env.SMTP_PORT || 587,
-                auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-            });
+        if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+            if (process.env.SMTP_HOST) {
+                transporter = nodemailer.createTransport({
+                    host: process.env.SMTP_HOST,
+                    port: parseInt(process.env.SMTP_PORT || "587"),
+                    secure: process.env.SMTP_SECURE === "true",
+                    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+                });
+            } else {
+                transporter = nodemailer.createTransport({
+                    service: process.env.SMTP_SERVICE || "gmail",
+                    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+                });
+            }
         } else {
-            const testAccount = await nodemailer.createTestAccount();
             transporter = nodemailer.createTransport({
-                host: "smtp.ethereal.email",
-                port: 587,
-                secure: false,
-                auth: { user: testAccount.user, pass: testAccount.pass }
+                service: "gmail",
+                auth: {
+                    user: "shantnu026@gmail.com",
+                    pass: "cgyr pyuk jnck yxfx"
+                }
             });
         }
 
+        const senderAddress = process.env.SMTP_USER || "shantnu026@gmail.com";
         const info = await transporter.sendMail({
-            from: '"ExamGOAL Evaluator" <evaluator@examgoal.net>',
+            from: `"ExamGOAL Evaluator" <${senderAddress}>`,
             to: EVALUATOR_EMAIL,
             subject: `[Scorecard] ${candidate.name} | Rights: ${correctCount} | Wrongs: ${incorrectCount} | Total: ${totalMarks}/${maxMarks}`,
             html: htmlContent

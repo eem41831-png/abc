@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: examgoal-cbt-portal
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: EXAM_PASSCODE
+        value: ORGANIC2026
+      - key: EVALUATOR_EMAIL
+        value: shan01tnu@gmail.com
+      - key: JWT_SECRET
+        generateValue: true
+      - key: MONGO_URI
+        value: mongodb+srv://eem41831_db_user:iyqvtKvKRlJuMtVs@cluster0.o1b2ccj.mongodb.net/?retryWrites=true&w=majority&connectTimeoutMS=10000
+      - key: SMTP_USER
+        value: shantnu026@gmail.com
+      - key: SMTP_PASS
+        value: cgyr pyuk jnck yxfx
