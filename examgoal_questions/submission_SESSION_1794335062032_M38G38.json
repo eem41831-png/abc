@@ -1,0 +1,60 @@
+{
+  "testSessionId": "SESSION_1794335062032_M38G38",
+  "candidate": {
+    "name": "Shantnu",
+    "email": "shan01tnu@gmail.com",
+    "rollNo": "JEE-2026-AIR-1",
+    "iat": 1794335061,
+    "exp": 1794421461
+  },
+  "submittedAt": "2026-11-10T18:24:22.036Z",
+  "timeTakenSeconds": 3600,
+  "tabSwitches": 1,
+  "screenSearchAttempts": 2,
+  "totalQuestions": 75,
+  "maxMarks": 300,
+  "totalMarks": -3,
+  "correctCount": 0,
+  "incorrectCount": 3,
+  "unattemptedCount": 72,
+  "accuracyPercent": "0.0",
+  "chapterBreakdown": {
+    "Alcohols, Phenols and Ethers": {
+      "total": 12,
+      "correct": 0,
+      "incorrect": 1,
+      "unattempted": 11
+    },
+    "Hydrocarbons": {
+      "total": 11,
+      "correct": 0,
+      "incorrect": 1,
+      "unattempted": 10
+    },
+    "Basics of Organic Chemistry & Aromatic Compounds": {
+      "total": 19,
+      "correct": 0,
+      "incorrect": 1,
+      "unattempted": 18
+    },
+    "Compounds Containing Nitrogen": {
+      "total": 11,
+      "correct": 0,
+      "incorrect": 0,
+      "unattempted": 11
+    },
+    "Haloalkanes and Haloarenes": {
+      "total": 10,
+      "correct": 0,
+      "incorrect": 0,
+      "unattempted": 10
+    },
+    "Aldehydes, Ketones and Carboxylic Acids": {
+      "total": 12,
+      "correct": 0,
+      "incorrect": 0,
+      "unattempted": 12
+    }
+  },
+  "_id": "6af361565cacb91078a189da"
+}

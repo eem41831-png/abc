@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>ExamGOAL &bull; Evaluator Score Intelligence & Search</title>
+  
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="admin-header">
+    <div class="header-container">
+      <div class="header-left">
+        <div class="brand-box">
+          <span class="brand-name">ExamGOAL</span>
+          <span class="badge-portal">EVALUATOR PORTAL</span>
+        </div>
+        <div class="status-indicator" id="dbStatus">
+          <span class="status-dot"></span>
+          <span id="dbStatusText">Connecting DB / Offline Cache...</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <a href="/" target="_blank" class="nav-link">
+          <span>Student Test View</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6m4-3h6v6m-11 5L21 3"/>
+          </svg>
+        </a>
+        <button id="refreshBtn" class="btn-secondary" title="Refresh Submissions">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          <span>Refresh</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="admin-main">
+    
+    <!-- KPI Analytics Cards -->
+    <section class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Submissions</div>
+        <div class="stat-value font-mono" id="statTotalCandidates">0</div>
+        <div class="stat-sub">Archived in DB & Disk</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Average Score</div>
+        <div class="stat-value font-mono" id="statAverageScore">0 <span class="stat-denom">/ 300</span></div>
+        <div class="stat-sub">Cohort Performance</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Highest Score</div>
+        <div class="stat-value font-mono text-emerald" id="statHighestScore">0 <span class="stat-denom">/ 300</span></div>
+        <div class="stat-sub">Top Scoring Aspirant</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Proctoring Flags</div>
+        <div class="stat-value font-mono text-rose" id="statFlaggedCount">0</div>
+        <div class="stat-sub">Circle-to-Search / Tab Shifts</div>
+      </div>
+    </section>
+
+    <!-- Search & Filter Controls -->
+    <section class="search-section">
+      <div class="search-bar-wrapper">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="text" id="searchInput" class="search-input" placeholder="Search candidate by name, email, roll number, or session ID..." autocomplete="off" spellcheck="false">
+        <span class="search-kbd font-mono">/</span>
+      </div>
+
+      <div class="filter-bar">
+        <div class="filter-chips">
+          <button class="filter-chip active" data-filter="all">All Submissions</button>
+          <button class="filter-chip" data-filter="clean">Clean (No Flags)</button>
+          <button class="filter-chip" data-filter="flagged">Flagged Violations</button>
+          <button class="filter-chip" data-filter="high">High Scorers (&gt; 100)</button>
+          <button class="filter-chip" data-filter="negative">Negative Scores</button>
+        </div>
+
+        <div class="sort-wrapper">
+          <span class="sort-label">Sort:</span>
+          <select id="sortSelect" class="sort-select font-mono">
+            <option value="newest">Newest First</option>
+            <option value="score_desc">Highest Score</option>
+            <option value="score_asc">Lowest Score</option>
+            <option value="violations">Most Flags</option>
+            <option value="name">Candidate Name (A-Z)</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- Submissions Table Section -->
+    <section class="table-section">
+      <div class="table-header-info">
+        <span class="table-title">Candidate Assessment Records</span>
+        <span class="table-count font-mono" id="resultsCount">Showing 0 records</span>
+      </div>
+
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Candidate</th>
+              <th>Roll ID</th>
+              <th>Submitted</th>
+              <th>Duration</th>
+              <th class="text-center">Rights</th>
+              <th class="text-center">Wrongs</th>
+              <th class="text-center">Left</th>
+              <th class="text-center">Total Score</th>
+              <th class="text-center">Accuracy</th>
+              <th class="text-center">Proctoring</th>
+              <th class="text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="submissionsTableBody">
+            <tr>
+              <td colspan="11" class="text-center text-muted py-8">Loading assessment records...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: DETAILED SCORECARD INSPECTION                     -->
+  <!-- ======================================================== -->
+  <div id="detailModal" class="modal-backdrop hidden">
+    <div class="scorecard-drawer">
+      
+      <!-- Drawer Header -->
+      <div class="drawer-header">
+        <div class="drawer-header-left">
+          <div class="badge-modal">Official Assessment Digest</div>
+          <h2 class="drawer-title" id="mCandidateName">Candidate Name</h2>
+          <div class="drawer-meta">
+            <span id="mCandidateEmail" class="text-muted">email@example.com</span>
+            <span class="meta-dot">&bull;</span>
+            <span id="mCandidateRoll" class="text-muted font-mono">ROLL: N/A</span>
+            <span class="meta-dot">&bull;</span>
+            <span id="mSessionId" class="text-muted font-mono">SESSION_ID</span>
+          </div>
+        </div>
+        <div class="drawer-header-right">
+          <button id="printModalBtn" class="btn-secondary btn-compact" title="Print Scorecard">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 6 2 18 2 18 9"/>
+              <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+              <rect x="6" y="14" width="12" height="8"/>
+            </svg>
+            <span>Print</span>
+          </button>
+          <button id="closeModalBtn" class="btn-icon" aria-label="Close">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Drawer Body -->
+      <div class="drawer-body">
+        
+        <!-- Score Highlights Banner -->
+        <div class="score-banner-grid">
+          <div class="score-box box-rights">
+            <div class="box-label">Rights (Correct)</div>
+            <div class="box-num font-mono" id="mRights">0</div>
+            <div class="box-sub font-mono">+4 each</div>
+          </div>
+          <div class="score-box box-wrongs">
+            <div class="box-label">Wrongs (Incorrect)</div>
+            <div class="box-num font-mono" id="mWrongs">0</div>
+            <div class="box-sub font-mono">-1 each</div>
+          </div>
+          <div class="score-box box-unattempted">
+            <div class="box-label">Unattempted</div>
+            <div class="box-num font-mono" id="mUnattempted">0</div>
+            <div class="box-sub font-mono">0 marks</div>
+          </div>
+          <div class="score-box box-total">
+            <div class="box-label">Total Score</div>
+            <div class="box-num font-mono" id="mTotalScore">0 <span class="denom">/ 300</span></div>
+            <div class="box-sub font-mono" id="mAccuracy">0% Accuracy</div>
+          </div>
+        </div>
+
+        <!-- Proctoring & Timing Audit -->
+        <div class="audit-strip">
+          <div class="audit-item">
+            <span class="audit-label">Duration:</span>
+            <span class="audit-val font-mono" id="mDuration">0m 0s / 180m</span>
+          </div>
+          <div class="audit-item">
+            <span class="audit-label">Tab Switches:</span>
+            <span class="audit-val font-mono" id="mTabSwitches">0</span>
+          </div>
+          <div class="audit-item">
+            <span class="audit-label">Circle-to-Search Strikes:</span>
+            <span class="audit-val font-mono" id="mCtsAttempts">0</span>
+          </div>
+          <div class="audit-item">
+            <span class="audit-label">Data Origin:</span>
+            <span class="audit-val font-mono" id="mSource">MongoDB Atlas</span>
+          </div>
+        </div>
+
+        <!-- Chapter Breakdown Table -->
+        <div class="drawer-section">
+          <h3 class="section-title">Chapter Breakdown</h3>
+          <div class="table-responsive">
+            <table class="sub-table">
+              <thead>
+                <tr>
+                  <th>Chapter</th>
+                  <th class="text-center">Questions</th>
+                  <th class="text-center text-emerald">Rights</th>
+                  <th class="text-center text-rose">Wrongs</th>
+                  <th class="text-center">Left</th>
+                </tr>
+              </thead>
+              <tbody id="mChapterBody">
+                <!-- Rendered dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 75 Question Responses Audit Table -->
+        <div class="drawer-section">
+          <div class="section-header-flex">
+            <h3 class="section-title">Itemized Responses (75 Questions)</h3>
+            <div class="resp-filter-chips">
+              <button class="chip-small active" data-qfilter="all">All</button>
+              <button class="chip-small" data-qfilter="correct">Rights Only</button>
+              <button class="chip-small" data-qfilter="incorrect">Wrongs Only</button>
+              <button class="chip-small" data-qfilter="left">Left Only</button>
+            </div>
+          </div>
+
+          <div class="table-responsive max-h-400">
+            <table class="sub-table">
+              <thead>
+                <tr>
+                  <th style="width: 50px;">Q#</th>
+                  <th>Chapter & Question Statement</th>
+                  <th class="text-center" style="width: 90px;">Candidate</th>
+                  <th class="text-center" style="width: 90px;">Correct</th>
+                  <th class="text-center" style="width: 100px;">Outcome</th>
+                </tr>
+              </thead>
+              <tbody id="mResponsesBody">
+                <!-- 75 questions rendered dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <script src="admin.js"></script>
+</body>
+</html>
