@@ -24,16 +24,22 @@ app.use(express.static(path.join(__dirname, 'public')));
 let mongoDb = null;
 let activeTestSessions = new Map(); // testSessionId -> { candidate, questionsWithAnswers, startTime }
 
-// Connect MongoDB Atlas
+// Connect MongoDB Atlas with Automatic Reconnection Loop
+let isConnectingMongo = false;
 async function connectDB() {
+    if (mongoDb || isConnectingMongo) return;
+    isConnectingMongo = true;
     try {
-        const client = new MongoClient(MONGO_URI);
+        const client = new MongoClient(MONGO_URI, { serverSelectionTimeoutMS: 5000 });
         await client.connect();
         mongoDb = client.db('examgoal');
         console.log("Connected to MongoDB Atlas: database 'examgoal'");
+        isConnectingMongo = false;
     } catch (err) {
-        console.warn("MongoDB Atlas direct connect notice:", err.message);
-        console.log("Using local JSON dataset fallback if remote connection is busy.");
+        console.warn("MongoDB Atlas connect notice (using local JSON storage):", err.message);
+        isConnectingMongo = false;
+        // Schedule auto-reconnect retry in 15 seconds
+        setTimeout(connectDB, 15000);
     }
 }
 connectDB();
