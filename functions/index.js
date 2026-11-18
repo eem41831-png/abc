@@ -308,6 +308,7 @@ app.post("/api/session/report-violation", requireAuth, (req, res) => {
 
 // ----------------- ADMIN DASHBOARD API -----------------
 app.get("/api/admin/submissions", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     try {
         const db = await getDB();
         if (db) {

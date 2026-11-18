@@ -46,35 +46,47 @@ const respFilterChips = document.querySelectorAll('.chip-small');
 // -------------------------------------------------------------
 // 1. DATA INITIALIZATION & STATS FETCH
 // -------------------------------------------------------------
-async function loadSubmissions() {
-    submissionsTableBody.innerHTML = `
-        <tr><td colspan="11" class="text-center text-muted py-8">Fetching assessment records from DB / Offline Storage...</td></tr>
-    `;
+async function loadSubmissions(isPolling = false) {
+    if (!isPolling && allSubmissions.length === 0) {
+        submissionsTableBody.innerHTML = `
+            <tr><td colspan="11" class="text-center text-muted py-8">Fetching assessment records from DB / Offline Storage...</td></tr>
+        `;
+    }
 
     try {
+        const timestamp = Date.now();
         const [subRes, statRes] = await Promise.all([
-            fetch('/api/admin/submissions'),
-            fetch('/api/admin/stats')
+            fetch(`/api/admin/submissions?t=${timestamp}`, { cache: 'no-store' }),
+            fetch(`/api/admin/stats?t=${timestamp}`, { cache: 'no-store' })
         ]);
 
         const subData = await subRes.json();
         const statData = await statRes.json();
 
         if (subData.success) {
+            const previousCount = allSubmissions.length;
+            const newCount = (subData.submissions || []).length;
             allSubmissions = subData.submissions || [];
             updateDBStatus(allSubmissions);
             renderStats(statData);
             applyFilterAndSearch();
+
+            if (isPolling && previousCount > 0 && newCount > previousCount) {
+                const diff = newCount - previousCount;
+                showNotificationBadge(`${diff} new assessment${diff > 1 ? 's' : ''} received!`);
+            }
         } else {
             throw new Error(subData.error || "Failed to load submissions");
         }
     } catch (err) {
-        console.error("Error loading submissions:", err);
-        submissionsTableBody.innerHTML = `
-            <tr><td colspan="11" class="text-center text-rose py-8">Failed to load records: ${err.message}</td></tr>
-        `;
-        dbStatus.className = 'status-indicator offline';
-        dbStatusText.textContent = "Offline Mode (Local Storage Fallback)";
+        if (!isPolling) {
+            console.error("Error loading submissions:", err);
+            submissionsTableBody.innerHTML = `
+                <tr><td colspan="11" class="text-center text-rose py-8">Failed to load records: ${err.message}</td></tr>
+            `;
+            dbStatus.className = 'status-indicator offline';
+            dbStatusText.textContent = "Offline Mode (Local Storage Fallback)";
+        }
     }
 }
 
@@ -345,7 +357,10 @@ sortSelect.addEventListener('change', () => {
 });
 
 refreshBtn.addEventListener('click', () => {
-    loadSubmissions();
+    refreshBtn.classList.add('loading');
+    loadSubmissions(false).finally(() => {
+        setTimeout(() => refreshBtn.classList.remove('loading'), 400);
+    });
 });
 
 closeModalBtn.addEventListener('click', () => {
@@ -407,5 +422,25 @@ function escapeHtml(text) {
         .replace(/'/g, '&#039;');
 }
 
+function showNotificationBadge(msg) {
+    let toast = document.getElementById('adminLiveToast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'adminLiveToast';
+        toast.className = 'admin-live-toast';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.classList.add('visible');
+    setTimeout(() => toast.classList.remove('visible'), 3500);
+}
+
 // Initialize on Load
 loadSubmissions();
+
+// Live Real-Time Auto-Polling (Polls every 4 seconds for new submissions)
+setInterval(() => {
+    if (!document.hidden && detailModal.classList.contains('hidden')) {
+        loadSubmissions(true);
+    }
+}, 4000);

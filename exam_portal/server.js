@@ -497,38 +497,65 @@ async function sendEvaluatorEmail(record) {
 
 // ----------------- OFFLINE & DB SUBMISSION QUERIES -----------------
 async function getAllSubmissions() {
-    let submissions = [];
+    const submissionsMap = new Map(); // testSessionId -> submission object
 
-    // 1. Try MongoDB Atlas if connected
+    // 1. Read all local backup files first
+    const backupDir = path.resolve(__dirname, '..', 'examgoal_questions');
+    if (fs.existsSync(backupDir)) {
+        try {
+            const files = fs.readdirSync(backupDir).filter(f => f.startsWith('submission_') && f.endsWith('.json'));
+            for (const file of files) {
+                try {
+                    const content = JSON.parse(fs.readFileSync(path.join(backupDir, file), 'utf-8'));
+                    if (content && content.testSessionId) {
+                        submissionsMap.set(content.testSessionId, { ...content, source: 'Local Storage (Offline)' });
+                    }
+                } catch (_) {}
+            }
+        } catch (e) {
+            console.warn("Local storage read warning:", e.message);
+        }
+    }
+
+    // 2. Query MongoDB Atlas and merge/sync
     if (mongoDb) {
         try {
             const docs = await mongoDb.collection('submissions').find({}).sort({ submittedAt: -1 }).toArray();
             if (docs && docs.length > 0) {
-                return docs.map(d => ({ ...d, source: 'MongoDB Atlas' }));
+                for (const doc of docs) {
+                    if (doc && doc.testSessionId) {
+                        submissionsMap.set(doc.testSessionId, { ...doc, source: 'MongoDB Atlas' });
+                    }
+                }
+
+                // Auto-sync: Push any local-only submissions up to MongoDB Atlas in background
+                for (const [id, localSub] of submissionsMap.entries()) {
+                    if (localSub.source === 'Local Storage (Offline)') {
+                        mongoDb.collection('submissions').updateOne(
+                            { testSessionId: id },
+                            { $set: localSub },
+                            { upsert: true }
+                        ).catch(() => {});
+                    }
+                }
             }
         } catch (e) {
-            console.warn("MongoDB query notice, reading from offline disk:", e.message);
+            console.warn("MongoDB Atlas sync notice:", e.message);
         }
     }
 
-    // 2. Offline Fallback: Read local submission JSON files
-    const backupDir = path.resolve(__dirname, '..', 'examgoal_questions');
-    if (fs.existsSync(backupDir)) {
-        const files = fs.readdirSync(backupDir).filter(f => f.startsWith('submission_') && f.endsWith('.json'));
-        for (const file of files) {
-            try {
-                const content = JSON.parse(fs.readFileSync(path.join(backupDir, file), 'utf-8'));
-                submissions.push({ ...content, source: 'Local Storage (Offline)' });
-            } catch (_) {}
-        }
-    }
-
+    // Convert map to array and sort newest first
+    const submissions = Array.from(submissionsMap.values());
     submissions.sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
     return submissions;
 }
 
-// Admin Submissions List (Fast Summary with Live Search compatibility)
+// Admin Submissions List (Fast Summary with Live Search compatibility & No-Cache)
 app.get('/api/admin/submissions', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     try {
         const all = await getAllSubmissions();
         const summaries = all.map(s => ({
@@ -554,6 +581,10 @@ app.get('/api/admin/submissions', async (req, res) => {
 
 // Admin Single Submission Detail (With full 75 questions & chapter breakdown)
 app.get('/api/admin/submissions/:sessionId', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     try {
         const { sessionId } = req.params;
         // 1. Try DB
@@ -579,6 +610,9 @@ app.get('/api/admin/submissions/:sessionId', async (req, res) => {
 
 // Admin Aggregate Stats
 app.get('/api/admin/stats', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     try {
         const all = await getAllSubmissions();
         const total = all.length;
