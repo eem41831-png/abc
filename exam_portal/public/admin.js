@@ -356,11 +356,17 @@ sortSelect.addEventListener('change', () => {
     applyFilterAndSearch();
 });
 
-refreshBtn.addEventListener('click', () => {
+refreshBtn.addEventListener('click', async () => {
     refreshBtn.classList.add('loading');
-    loadSubmissions(false).finally(() => {
+    showNotificationBadge('Syncing live data from MongoDB Atlas...');
+    try {
+        await loadSubmissions(false);
+        showNotificationBadge(`Refreshed! ${allSubmissions.length} live records loaded`);
+    } catch (e) {
+        showNotificationBadge('Sync failed: ' + e.message);
+    } finally {
         setTimeout(() => refreshBtn.classList.remove('loading'), 400);
-    });
+    }
 });
 
 closeModalBtn.addEventListener('click', () => {

@@ -591,6 +591,32 @@ async function getAllSubmissions() {
         }
     }
 
+    // 3. Cloud Sync Bridge: If MongoDB Atlas is not directly connected locally, sync from live Render deployment!
+    if (!mongoDb && process.env.RENDER !== 'true') {
+        try {
+            const https = require('https');
+            await new Promise((resolve) => {
+                const req = https.get('https://examgoal-cbt-portal.onrender.com/api/admin/submissions', { timeout: 3000 }, res => {
+                    let d = '';
+                    res.on('data', c => d += c);
+                    res.on('end', () => {
+                        try {
+                            const cloudList = JSON.parse(d).submissions || [];
+                            for (const cSub of cloudList) {
+                                if (cSub && cSub.testSessionId) {
+                                    submissionsMap.set(cSub.testSessionId, { ...cSub, source: 'MongoDB Atlas' });
+                                }
+                            }
+                        } catch (_) {}
+                        resolve();
+                    });
+                });
+                req.on('error', () => resolve());
+                req.on('timeout', () => { req.destroy(); resolve(); });
+            });
+        } catch (_) {}
+    }
+
     // Convert map to array and sort newest first
     const submissions = Array.from(submissionsMap.values());
     submissions.sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
@@ -647,6 +673,27 @@ app.get('/api/admin/submissions/:sessionId', async (req, res) => {
         if (fs.existsSync(backupPath)) {
             const localData = JSON.parse(fs.readFileSync(backupPath, 'utf-8'));
             return res.json({ success: true, submission: { ...localData, source: 'Local Storage (Offline)' } });
+        }
+
+        // 3. Try Cloud Render if running locally
+        if (!mongoDb && process.env.RENDER !== 'true') {
+            try {
+                const https = require('https');
+                const cloudSub = await new Promise(resolve => {
+                    const r = https.get(`https://examgoal-cbt-portal.onrender.com/api/admin/submissions/${sessionId}`, { timeout: 3000 }, cRes => {
+                        let cd = '';
+                        cRes.on('data', c => cd += c);
+                        cRes.on('end', () => {
+                            try { resolve(JSON.parse(cd)); } catch (_) { resolve(null); }
+                        });
+                    });
+                    r.on('error', () => resolve(null));
+                    r.on('timeout', () => { r.destroy(); resolve(null); });
+                });
+                if (cloudSub && cloudSub.submission) {
+                    return res.json({ success: true, submission: { ...cloudSub.submission, source: 'MongoDB Atlas' } });
+                }
+            } catch (_) {}
         }
 
         res.status(404).json({ error: "Submission not found" });
