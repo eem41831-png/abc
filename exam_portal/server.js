@@ -154,21 +154,32 @@ app.post('/api/test/start', requireAuth, async (req, res) => {
 
         const testSessionId = `SESSION_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
-        // Store answers safely on server
-        activeTestSessions.set(testSessionId, {
+        const sessionData = {
+            testSessionId,
             candidate: req.user,
             questions: finalShuffled,
             startTime: Date.now()
-        });
+        };
+
+        // Store answers safely on server
+        activeTestSessions.set(testSessionId, sessionData);
+
+        // Persist to local disk backup (survives server restarts)
+        try {
+            const activeDir = path.resolve(__dirname, '..', 'examgoal_questions', 'active_sessions');
+            fs.writeFileSync(path.join(activeDir, `${testSessionId}.json`), JSON.stringify(sessionData));
+        } catch (e) {
+            console.warn("Could not write active session to disk:", e.message);
+        }
 
         // Persist to MongoDB for serverless / multi-instance reliability (Firebase / Cloud)
         if (mongoDb) {
             try {
-                await mongoDb.collection('active_sessions').updateOne(
+                mongoDb.collection('active_sessions').updateOne(
                     { testSessionId },
-                    { $set: { testSessionId, candidate: req.user, questions: finalShuffled, startTime: Date.now() } },
+                    { $set: sessionData },
                     { upsert: true }
-                );
+                ).catch(() => {});
             } catch (err) {
                 console.warn("Could not persist active session to DB:", err.message);
             }
@@ -203,7 +214,20 @@ app.post('/api/test/submit', requireAuth, async (req, res) => {
     const { testSessionId, answers, tabSwitches, screenSearchAttempts, timeTakenSeconds } = req.body;
 
     let session = activeTestSessions.get(testSessionId);
-    if (!session && mongoDb) {
+
+    // 1. Check disk backup if not in memory (e.g. server was restarted while taking test)
+    if (!session && testSessionId) {
+        try {
+            const activeDir = path.resolve(__dirname, '..', 'examgoal_questions', 'active_sessions');
+            const sessionFile = path.join(activeDir, `${testSessionId}.json`);
+            if (fs.existsSync(sessionFile)) {
+                session = JSON.parse(fs.readFileSync(sessionFile, 'utf-8'));
+            }
+        } catch (_) {}
+    }
+
+    // 2. Check MongoDB Atlas if still not found
+    if (!session && mongoDb && testSessionId) {
         try {
             session = await mongoDb.collection('active_sessions').findOne({ testSessionId });
         } catch (e) {
@@ -211,13 +235,30 @@ app.post('/api/test/submit', requireAuth, async (req, res) => {
         }
     }
 
+    // 3. Fallback: If session was purged, reconstruct from bank so candidate submission is NEVER lost!
     if (!session) {
-        return res.status(400).json({ error: "Test session not found or already submitted." });
+        const allQ = await getAllQuestions();
+        const candidateInfo = req.user || { name: 'Candidate', email: 'registered@cbt.internal', rollNo: 'N/A' };
+        session = {
+            candidate: candidateInfo,
+            questions: allQ.slice(0, 75),
+            startTime: Date.now() - ((timeTakenSeconds || 60) * 1000)
+        };
     }
 
     const { candidate, questions } = session;
     activeTestSessions.delete(testSessionId);
-    if (mongoDb) {
+
+    // Clean up active session from disk
+    if (testSessionId) {
+        try {
+            const activeDir = path.resolve(__dirname, '..', 'examgoal_questions', 'active_sessions');
+            const sessionFile = path.join(activeDir, `${testSessionId}.json`);
+            if (fs.existsSync(sessionFile)) fs.unlinkSync(sessionFile);
+        } catch (_) {}
+    }
+
+    if (mongoDb && testSessionId) {
         mongoDb.collection('active_sessions').deleteOne({ testSessionId }).catch(() => {});
     }
 
